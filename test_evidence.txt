@@ -1,0 +1,202 @@
+test_01_load_and_rank_real_endpoint_alerts (test_alert_ranker.TestStarterPackRankingAndCorrelation.test_01_load_and_rank_real_endpoint_alerts)
+Verify that endpoint_alerts.json loads cleanly and ranks EDR-1004 -> EDR-1002 -> EDR-1003 -> EDR-1001. ... ok
+test_02_soc_detection_test_cases_csv_all_pass_in_mode_a_full_dataset (test_alert_ranker.TestStarterPackRankingAndCorrelation.test_02_soc_detection_test_cases_csv_all_pass_in_mode_a_full_dataset)
+Verify all 5 test cases (SOC-T01 through SOC-T05) pass in Mode A (full-dataset evaluation). ... ok
+test_03_false_positive_and_training_alert_deprioritized (test_alert_ranker.TestStarterPackRankingAndCorrelation.test_03_false_positive_and_training_alert_deprioritized)
+Verify that blocked training simulation alert EDR-1001 is assigned P4 (Low) with documented assumption. ... ok
+test_04_explicit_criticality_and_confidence_override_inferences (test_alert_ranker.TestStarterPackRankingAndCorrelation.test_04_explicit_criticality_and_confidence_override_inferences)
+Verify that explicit asset_criticality and confidence fields override host/note heuristics. ... ok
+test_05_malformed_and_missing_fields_handled_safely (test_alert_ranker.TestStarterPackRankingAndCorrelation.test_05_malformed_and_missing_fields_handled_safely)
+Verify that malformed records are isolated into ValidationErrorRecord without crashing. ... ok
+test_06_priority_threshold_boundaries_and_tie_breaking (test_alert_ranker.TestStarterPackRankingAndCorrelation.test_06_priority_threshold_boundaries_and_tie_breaking)
+Regression test for exact priority boundaries (75.0, 60.0, 40.0) and deterministic sorting. ... ok
+test_07_cli_end_to_end_and_dual_timeline_export (test_alert_ranker.TestStarterPackRankingAndCorrelation.test_07_cli_end_to_end_and_dual_timeline_export)
+Verify end-to-end CLI execution exports both Mode A/B test results and separate Strict vs Full timelines. ... ========================================================================================
+SECURITY ALERT RISK-RANKING PROTOTYPE — SOC TRIAGE REPORT (STUDENT ID: 2419)
+========================================================================================
+Dataset : RedKross synthetic endpoint alerts
+Notice  : Fictional training data. No real endpoints or users.
+Official Incident Window (INC-2026-104): 2026-10-19T08:00:00Z to 2026-10-19T10:30:00Z
+Methodology Note: Confidence values are heuristic prioritisation scores, not calibrated
+probabilities. Hostname-derived asset criticality is an assumption; production deployments
+should query an approved asset inventory or CMDB. Alerts and correlations are investigative
+indicators, not proof of compromise.
+Summary : 4 valid alert(s) ranked | 0 malformed record(s) skipped
+----------------------------------------------------------------------------------------
+Rank  Alert ID   Priority        Score    Sev      Crit       Conf   Action        Host           User
+----------------------------------------------------------------------------------------
+#1    EDR-1004   P1 (Critical)   90.50    high     critical   90     logged        ADMIN-CONSOLE  m.patel
+#2    EDR-1002   P2 (High)       66.25    medium   medium     85     allowed       WKSTN-008      t.garcia
+#3    EDR-1003   P2 (High)       66.00    medium   high       80     rate_limited  VPN-GW-01      unknown
+#4    EDR-1001   P4 (Low)        32.75    low      medium     30     blocked       WKSTN-014      j.lee
+----------------------------------------------------------------------------------------
+
+DETAILED SCORING EXPLANATIONS, CORRELATION AUDIT & TRIAGE GUIDANCE:
+
+[#1] EDR-1004 — Privilege granted without change reference (2026-10-19T10:07:02Z)
+  Host / User / Process : ADMIN-CONSOLE | m.patel | admin-api
+  Ticket / Analyst Note : INC-504 | Validate against approved change record before closing.
+  Scoring Breakdown     : Priority P1 (Critical) (Score 90.50/100): severity='high' (85 * 0.35 = 29.75) + asset_criticality='critical' (100 * 0.30 = 30.00) + heuristic_confidence=90% (90 * 0.20 = 18.00) + action='logged' (85 * 0.15 = 12.75). Correlated auth events in directional window: AUTH-0016, AUTH-0017.
+  Documented Assumptions:
+    - Assumption: asset_criticality not in source JSON; inferred 'critical' (score 100, contributing +30.00 to risk score) from privileged management hostname 'ADMIN-CONSOLE'. Production systems should obtain asset criticality from an approved asset inventory or CMDB.
+    - Assumption: confidence not in source JSON; assigned heuristic score 90.0% (high, contributing +18.00 to risk score) due to pre-alert correlation with privilege events [AUTH-0016, AUTH-0017] on ADMIN-CONSOLE. Heuristic prioritisation score (not a statistically calibrated probability); correlation does not prove compromise.
+  Correlation Audit (Matched & Excluded Candidates):
+    - Excluded candidate AUTH-0002: timestamp 2026-10-19T08:05:44Z (7278s prior to alert) is outside pre-alert lookback [-10m, +0m]; target_system 'workstation-03' != alert host 'ADMIN-CONSOLE'; event_type 'login_success' != 'privilege_granted'.
+    - Matched AUTH-0016 (2026-10-19T10:03:41Z, 201s prior to alert within pre-alert lookback [-10m, +0m]): host 'ADMIN-CONSOLE' == 'admin-console', matched user 'm.patel' and event_type 'privilege_granted'.
+    - Matched AUTH-0017 (2026-10-19T10:06:12Z, 50s prior to alert within pre-alert lookback [-10m, +0m]): host 'ADMIN-CONSOLE' == 'admin-console', matched user 'm.patel' and event_type 'privilege_granted'.
+  Recommended Triage    : [P1 (Critical) | Sev: high | Crit: critical | Heuristic Conf: 90%] Action was 'logged' only (unblocked) on critical-criticality host 'ADMIN-CONSOLE'. Reconcile administrative privilege grant for 'm.patel' via 'admin-api' against approved change records (ticket INC-504). Preserve admin audit logs before adjusting permissions. Correlated auth telemetry in window: [AUTH-0016, AUTH-0017]. Treat as an investigative indicator, not confirmed compromise, until verified.
+
+[#2] EDR-1002 — Repeated MFA denial (2026-10-19T08:31:47Z)
+  Host / User / Process : WKSTN-008 | t.garcia | browser.exe
+  Ticket / Analyst Note : INC-502 | Correlates with MFA_DENIED events.
+  Scoring Breakdown     : Priority P2 (High) (Score 66.25/100): severity='medium' (55 * 0.35 = 19.25) + asset_criticality='medium' (50 * 0.30 = 15.00) + heuristic_confidence=85% (85 * 0.20 = 17.00) + action='allowed' (100 * 0.15 = 15.00). Correlated auth events in directional window: AUTH-0009, AUTH-0010.
+  Documented Assumptions:
+    - Assumption: asset_criticality not in source JSON; inferred 'medium' (score 50, contributing +15.00 to risk score) from standard workstation hostname 'WKSTN-008'. Production systems should obtain asset criticality from an approved asset inventory or CMDB.
+    - Assumption: confidence not in source JSON; assigned heuristic score 85.0% (high, contributing +17.00 to risk score) due to time-window correlation with repeated MFA denials [AUTH-0009, AUTH-0010] on WKSTN-008. Heuristic prioritisation score (not a statistically calibrated probability); correlation does not prove compromise.
+  Correlation Audit (Matched & Excluded Candidates):
+    - Matched AUTH-0009 (2026-10-19T08:35:29Z, +222s after alert within bidirectional [-5m, +5m]): host 'WKSTN-008' == 'workstation-08', matched user 't.garcia' and event_type 'mfa_denied'.
+    - Matched AUTH-0010 (2026-10-19T08:36:02Z, +255s after alert within bidirectional [-5m, +5m]): host 'WKSTN-008' == 'workstation-08', matched user 't.garcia' and event_type 'mfa_denied'.
+  Recommended Triage    : [P2 (High) | Sev: medium | Crit: medium | Heuristic Conf: 85%] Action was 'allowed' on medium-criticality host 'WKSTN-008' (process 'browser.exe' was not blocked). Contact user 't.garcia' out-of-band to verify whether the MFA push prompts were user-initiated, inspect active browser/VPN sessions, and rotate credentials if the prompts were unexpected. Correlated auth telemetry in window: [AUTH-0009, AUTH-0010]. Treat as an investigative indicator, not confirmed compromise, until verified.
+
+[#3] EDR-1003 — Repeated authentication failures (2026-10-19T09:17:01Z)
+  Host / User / Process : VPN-GW-01 | unknown | auth-service
+  Ticket / Analyst Note : INC-503 | Correlate source 203.0.113.91 and event count.
+  Scoring Breakdown     : Priority P2 (High) (Score 66.00/100): severity='medium' (55 * 0.35 = 19.25) + asset_criticality='high' (75 * 0.30 = 22.50) + heuristic_confidence=80% (80 * 0.20 = 16.00) + action='rate_limited' (55 * 0.15 = 8.25). Correlated auth events in directional window: AUTH-0012, AUTH-0013, AUTH-0014.
+  Documented Assumptions:
+    - Assumption: asset_criticality not in source JSON; inferred 'high' (score 75, contributing +22.50 to risk score) from perimeter/infrastructure hostname 'VPN-GW-01'. Production systems should obtain asset criticality from an approved asset inventory or CMDB.
+    - Assumption: confidence not in source JSON; assigned heuristic score 80.0% (high, contributing +16.00 to risk score) due to pre-alert correlation with failed login events [AUTH-0012, AUTH-0013, AUTH-0014] on VPN-GW-01. Heuristic prioritisation score (not a statistically calibrated probability); correlation does not prove compromise.
+  Correlation Audit (Matched & Excluded Candidates):
+    - Excluded candidate AUTH-0003: timestamp 2026-10-19T08:14:03Z (3778s prior to alert) is outside pre-alert lookback [-5m, +0m]; username 'a.chen' != 'unknown'.
+    - Excluded candidate AUTH-0004: timestamp 2026-10-19T08:14:11Z (3770s prior to alert) is outside pre-alert lookback [-5m, +0m]; username 'a.chen' != 'unknown'.
+    - Excluded candidate AUTH-0005: timestamp 2026-10-19T08:14:18Z (3763s prior to alert) is outside pre-alert lookback [-5m, +0m]; username 'a.chen' != 'unknown'.
+    - Excluded candidate AUTH-0006: timestamp 2026-10-19T08:14:27Z (3754s prior to alert) is outside pre-alert lookback [-5m, +0m]; username 'a.chen' != 'unknown'.
+    - Excluded candidate AUTH-0007: timestamp 2026-10-19T08:15:01Z (3720s prior to alert) is outside pre-alert lookback [-5m, +0m]; event_type 'login_success' != 'login_failure'.
+    - Matched AUTH-0012 (2026-10-19T09:15:55Z, 66s prior to alert within pre-alert lookback [-5m, +0m]): host 'VPN-GW-01' == 'vpn-gateway', matched user 'unknown' and source_ip '203.0.113.91'.
+    - Matched AUTH-0013 (2026-10-19T09:16:04Z, 57s prior to alert within pre-alert lookback [-5m, +0m]): host 'VPN-GW-01' == 'vpn-gateway', matched user 'unknown' and source_ip '203.0.113.91'.
+    - Matched AUTH-0014 (2026-10-19T09:16:19Z, 42s prior to alert within pre-alert lookback [-5m, +0m]): host 'VPN-GW-01' == 'vpn-gateway', matched user 'unknown' and source_ip '203.0.113.91'.
+  Recommended Triage    : [P2 (High) | Sev: medium | Crit: high | Heuristic Conf: 80%] Action was 'rate_limited' on high-criticality host 'VPN-GW-01', reducing immediate brute-force throughput. Review perimeter authentication logs on 'VPN-GW-01' for the source IP noted in INC-503, check whether any subsequent login succeeded from that IP, and verify rate-limiting thresholds. Correlated auth telemetry in window: [AUTH-0012, AUTH-0013, AUTH-0014]. Treat as an investigative indicator, not confirmed compromise, until verified.
+
+[#4] EDR-1001 — Office child process unusual (2026-10-19T08:18:02Z)
+  Host / User / Process : WKSTN-014 | j.lee | WINWORD.EXE -> powershell.exe
+  Ticket / Analyst Note : INC-501 | Training simulation; inspect context, do not assume malicious.
+  Scoring Breakdown     : Priority P4 (Low) (Score 32.75/100): severity='low' (25 * 0.35 = 8.75) + asset_criticality='medium' (50 * 0.30 = 15.00) + heuristic_confidence=30% (30 * 0.20 = 6.00) + action='blocked' (20 * 0.15 = 3.00).
+  Documented Assumptions:
+    - Assumption: asset_criticality not in source JSON; inferred 'medium' (score 50, contributing +15.00 to risk score) from standard workstation hostname 'WKSTN-014'. Production systems should obtain asset criticality from an approved asset inventory or CMDB.
+    - Assumption: confidence not in source JSON; assigned heuristic score 30.0% (low, contributing +6.00 to risk score) because analyst_note marks this alert as a 'Training simulation'. Heuristic prioritisation score (not a statistically calibrated probability); correlation does not prove compromise.
+  Correlation Audit (Matched & Excluded Candidates):
+    - Excluded candidate AUTH-0001: timestamp 2026-10-19T08:01:12Z (1010s prior to alert) is outside pre-alert lookback [-10m, +0m]; rule 'Office child process unusual' has no auth-correlation mapping.
+  Recommended Triage    : [P4 (Low) | Sev: low | Crit: medium | Heuristic Conf: 30%] Endpoint control 'blocked' execution of 'WINWORD.EXE -> powershell.exe' on medium-criticality host 'WKSTN-014'. Verify with the training coordinator that ticket INC-501 for user 'j.lee' matches an authorised simulation before closing. No correlated auth events matched within the time window. Treat as an investigative indicator, not confirmed compromise, until verified.
+
+========================================================================================
+MODE A: FULL-DATASET SOC DETECTION TEST EVALUATION (ALL 20 AUTH EVENTS)
+========================================================================================
+[PASS] SOC-T01 (mode=full_dataset): expected='suspicious', actual='suspicious' | Matched: AUTH-0003, AUTH-0004, AUTH-0005, AUTH-0006
+       Pattern : 4+ login_failure events for same username and source IP within 2 minutes
+       Evidence: User 'a.chen' from 203.0.113.77 had 4 login_failure events within 24s (AUTH-0003..AUTH-0006), followed by MFA login_success (AUTH-0007).
+[PASS] SOC-T02 (mode=full_dataset): expected='review', actual='review' | Matched: AUTH-0009, AUTH-0010
+       Pattern : mfa_denied twice by same user within 5 minutes
+       Evidence: User 't.garcia' denied 2 push MFA prompts within 33s on workstation-08 (correlates with EDR-1002).
+[PASS] SOC-T03 (mode=full_dataset): expected='high_review', actual='high_review' | Matched: AUTH-0017
+       Pattern : privilege_granted event without change ticket
+       Evidence: Event AUTH-0017 granted privilege to 'm.patel' on admin-console with note 'no change ticket in event; investigate' (correlates with EDR-1004).
+[PASS] SOC-T04 (mode=full_dataset): expected='likely_benign', actual='likely_benign' | Matched: AUTH-0019, AUTH-0020
+       Pattern : single login_failure followed by MFA login_success from same workstation
+       Evidence: User 'd.ross' on workstation-22 (198.51.100.36) had 1 login_failure (AUTH-0019 at 2026-10-19T10:22:16Z) followed by MFA login_success (AUTH-0020 at 2026-10-19T11:51:08Z). Discrepancy note (Mode A Full-Dataset): AUTH-0020 (2026-10-19T11:51:08Z) occurs 88m 52s after AUTH-0019 (2026-10-19T10:22:16Z) and outside the official INC-2026-104 detection window (08:00:00Z–10:30:00Z); this full-dataset pattern match is not proof that the overall incident was benign.
+[PASS] SOC-T05 (mode=full_dataset): expected='likely_benign', actual='likely_benign' | Matched: AUTH-0008
+       Pattern : scheduled svc-backup login from documented internal fixture address
+       Evidence: Scheduled service login AUTH-0008 by 'svc-backup' from documented TEST-NET-1 fixture IP 192.0.2.40 to backup-01.
+
+========================================================================================
+MODE B: STRICT INCIDENT-WINDOW SOC TEST EVALUATION (08:00:00Z–10:30:00Z ONLY; AUTH-0020 EXCLUDED)
+========================================================================================
+[PASS] SOC-T01 (mode=strict_incident_window): expected='suspicious', actual='suspicious' | Matched: AUTH-0003, AUTH-0004, AUTH-0005, AUTH-0006
+       Pattern : 4+ login_failure events for same username and source IP within 2 minutes
+       Evidence: User 'a.chen' from 203.0.113.77 had 4 login_failure events within 24s (AUTH-0003..AUTH-0006), followed by MFA login_success (AUTH-0007).
+[PASS] SOC-T02 (mode=strict_incident_window): expected='review', actual='review' | Matched: AUTH-0009, AUTH-0010
+       Pattern : mfa_denied twice by same user within 5 minutes
+       Evidence: User 't.garcia' denied 2 push MFA prompts within 33s on workstation-08 (correlates with EDR-1002).
+[PASS] SOC-T03 (mode=strict_incident_window): expected='high_review', actual='high_review' | Matched: AUTH-0017
+       Pattern : privilege_granted event without change ticket
+       Evidence: Event AUTH-0017 granted privilege to 'm.patel' on admin-console with note 'no change ticket in event; investigate' (correlates with EDR-1004).
+[DISCREPANCY/REVIEW] SOC-T04 (mode=strict_incident_window): expected='likely_benign', actual='insufficient_evidence' | Matched: AUTH-0019
+       Pattern : single login_failure followed by MFA login_success from same workstation
+       Evidence: Mode B (Strict Incident Window 2026-10-19T08:00:00Z–2026-10-19T10:30:00Z): User 'd.ross' had a single login_failure (AUTH-0019 at 2026-10-19T10:22:16Z) on workstation-22, but the required subsequent MFA login_success was NOT observed within the 08:00–10:30 UTC incident window (AUTH-0020 at 2026-10-19T11:51:08Z occurs 88m 52s later, outside the official window, and is excluded). Returning 'insufficient_evidence' rather than claiming the complete 'likely_benign' pattern occurred inside the incident window.
+[PASS] SOC-T05 (mode=strict_incident_window): expected='likely_benign', actual='likely_benign' | Matched: AUTH-0008
+       Pattern : scheduled svc-backup login from documented internal fixture address
+       Evidence: Scheduled service login AUTH-0008 by 'svc-backup' from documented TEST-NET-1 fixture IP 192.0.2.40 to backup-01.
+
+========================================================================================
+OFFICIAL STRICT INCIDENT-WINDOW TIMELINE (2026-10-19 08:00:00Z TO 10:30:00Z — 23 EVENTS; POST-10:30Z EVENTS EXCLUDED)
+========================================================================================
+2026-10-19T08:01:12Z | AUTH-0001 | LIKELY_BENIGN              | j.lee@workstation-14 (198.51.100.21) | login_success via MFA — normal office login [Routine authenticated session]
+2026-10-19T08:05:44Z | AUTH-0002 | LIKELY_BENIGN              | m.patel@workstation-03 (198.51.100.22) | login_success via MFA — normal office login [Routine authenticated session]
+2026-10-19T08:14:03Z | AUTH-0003 | SUSPICIOUS                 | a.chen@vpn-gateway (203.0.113.77) | login_failure via password — invalid password [Part of 4x repeated login_failure burst within 2m]
+2026-10-19T08:14:11Z | AUTH-0004 | SUSPICIOUS                 | a.chen@vpn-gateway (203.0.113.77) | login_failure via password — invalid password [Part of 4x repeated login_failure burst within 2m]
+2026-10-19T08:14:18Z | AUTH-0005 | SUSPICIOUS                 | a.chen@vpn-gateway (203.0.113.77) | login_failure via password — invalid password [Part of 4x repeated login_failure burst within 2m]
+2026-10-19T08:14:27Z | AUTH-0006 | SUSPICIOUS                 | a.chen@vpn-gateway (203.0.113.77) | login_failure via password — invalid password [Part of 4x repeated login_failure burst within 2m]
+2026-10-19T08:15:01Z | AUTH-0007 | REVIEW                     | a.chen@vpn-gateway (203.0.113.77) | login_success via MFA — success after repeated failures; review required [Login success following repeated login failures; session review required]
+2026-10-19T08:18:02Z | EDR-1001  | P4 (Low) [Score 32.75]     | j.lee@WKSTN-014                  | Office child process unusual (action=blocked, ticket=INC-501)
+2026-10-19T08:20:14Z | AUTH-0008 | LIKELY_BENIGN              | svc-backup@backup-01 (192.0.2.40) | login_success via service_token — scheduled backup job [Scheduled service-account login from documented fixture IP]
+2026-10-19T08:31:47Z | EDR-1002  | P2 (High) [Score 66.25]    | t.garcia@WKSTN-008               | Repeated MFA denial (action=allowed, ticket=INC-502)
+2026-10-19T08:35:29Z | AUTH-0009 | REVIEW                     | t.garcia@workstation-08 (198.51.100.45) | mfa_denied via push — user denied unexpected prompt [Part of 2x repeated MFA denial within 5m; user verification needed]
+2026-10-19T08:36:02Z | AUTH-0010 | REVIEW                     | t.garcia@workstation-08 (198.51.100.45) | mfa_denied via push — second unexpected prompt [Part of 2x repeated MFA denial within 5m; user verification needed]
+2026-10-19T09:02:10Z | AUTH-0011 | LIKELY_BENIGN              | r.khan@helpdesk-portal (198.51.100.28) | password_reset via email_otp — verified reset [Verified authentication event]
+2026-10-19T09:15:55Z | AUTH-0012 | SUSPICIOUS                 | unknown@vpn-gateway (203.0.113.91) | login_failure via password — unknown username [Part of 3x repeated login_failure burst within 2m]
+2026-10-19T09:16:04Z | AUTH-0013 | SUSPICIOUS                 | unknown@vpn-gateway (203.0.113.91) | login_failure via password — unknown username [Part of 3x repeated login_failure burst within 2m]
+2026-10-19T09:16:19Z | AUTH-0014 | SUSPICIOUS                 | unknown@vpn-gateway (203.0.113.91) | login_failure via password — unknown username [Part of 3x repeated login_failure burst within 2m]
+2026-10-19T09:17:01Z | EDR-1003  | P2 (High) [Score 66.00]    | unknown@VPN-GW-01                | Repeated authentication failures (action=rate_limited, ticket=INC-503)
+2026-10-19T09:40:12Z | AUTH-0015 | LIKELY_BENIGN              | n.wilson@workstation-09 (198.51.100.29) | login_success via MFA — normal office login [Routine authenticated session]
+2026-10-19T10:03:41Z | AUTH-0016 | LIKELY_BENIGN              | m.patel@admin-console (198.51.100.22) | privilege_granted via MFA — approved change ticket CHG-1042 [Privilege grant reconciled with approved change ticket]
+2026-10-19T10:06:12Z | AUTH-0017 | HIGH_REVIEW                | m.patel@admin-console (198.51.100.22) | privilege_granted via MFA — no change ticket in event; investigate [Unreferenced privilege grant requiring change verification]
+2026-10-19T10:07:02Z | EDR-1004  | P1 (Critical) [Score 90.50] | m.patel@ADMIN-CONSOLE            | Privilege granted without change reference (action=logged, ticket=INC-504)
+2026-10-19T10:18:03Z | AUTH-0018 | LIKELY_BENIGN              | svc-sync@directory-01 (192.0.2.55) | login_success via service_token — expected sync job [Scheduled service-account login from documented fixture IP]
+2026-10-19T10:22:16Z | AUTH-0019 | INSUFFICIENT_EVIDENCE      | d.ross@workstation-22 (198.51.100.36) | login_failure via password — single typo [Single login_failure without an observed follow-up MFA login_success inside the active time window; do not assume attack or confirmed benign]
+
+========================================================================================
+FULL-DATASET TIMELINE (ALL SUPPLIED TELEMETRY — 24 EVENTS INCLUDING POST-10:30Z CONTEXT)
+========================================================================================
+2026-10-19T08:01:12Z | AUTH-0001 | LIKELY_BENIGN              | j.lee@workstation-14 (198.51.100.21) | login_success via MFA — normal office login [Routine authenticated session]
+2026-10-19T08:05:44Z | AUTH-0002 | LIKELY_BENIGN              | m.patel@workstation-03 (198.51.100.22) | login_success via MFA — normal office login [Routine authenticated session]
+2026-10-19T08:14:03Z | AUTH-0003 | SUSPICIOUS                 | a.chen@vpn-gateway (203.0.113.77) | login_failure via password — invalid password [Part of 4x repeated login_failure burst within 2m]
+2026-10-19T08:14:11Z | AUTH-0004 | SUSPICIOUS                 | a.chen@vpn-gateway (203.0.113.77) | login_failure via password — invalid password [Part of 4x repeated login_failure burst within 2m]
+2026-10-19T08:14:18Z | AUTH-0005 | SUSPICIOUS                 | a.chen@vpn-gateway (203.0.113.77) | login_failure via password — invalid password [Part of 4x repeated login_failure burst within 2m]
+2026-10-19T08:14:27Z | AUTH-0006 | SUSPICIOUS                 | a.chen@vpn-gateway (203.0.113.77) | login_failure via password — invalid password [Part of 4x repeated login_failure burst within 2m]
+2026-10-19T08:15:01Z | AUTH-0007 | REVIEW                     | a.chen@vpn-gateway (203.0.113.77) | login_success via MFA — success after repeated failures; review required [Login success following repeated login failures; session review required]
+2026-10-19T08:18:02Z | EDR-1001  | P4 (Low) [Score 32.75]     | j.lee@WKSTN-014                  | Office child process unusual (action=blocked, ticket=INC-501)
+2026-10-19T08:20:14Z | AUTH-0008 | LIKELY_BENIGN              | svc-backup@backup-01 (192.0.2.40) | login_success via service_token — scheduled backup job [Scheduled service-account login from documented fixture IP]
+2026-10-19T08:31:47Z | EDR-1002  | P2 (High) [Score 66.25]    | t.garcia@WKSTN-008               | Repeated MFA denial (action=allowed, ticket=INC-502)
+2026-10-19T08:35:29Z | AUTH-0009 | REVIEW                     | t.garcia@workstation-08 (198.51.100.45) | mfa_denied via push — user denied unexpected prompt [Part of 2x repeated MFA denial within 5m; user verification needed]
+2026-10-19T08:36:02Z | AUTH-0010 | REVIEW                     | t.garcia@workstation-08 (198.51.100.45) | mfa_denied via push — second unexpected prompt [Part of 2x repeated MFA denial within 5m; user verification needed]
+2026-10-19T09:02:10Z | AUTH-0011 | LIKELY_BENIGN              | r.khan@helpdesk-portal (198.51.100.28) | password_reset via email_otp — verified reset [Verified authentication event]
+2026-10-19T09:15:55Z | AUTH-0012 | SUSPICIOUS                 | unknown@vpn-gateway (203.0.113.91) | login_failure via password — unknown username [Part of 3x repeated login_failure burst within 2m]
+2026-10-19T09:16:04Z | AUTH-0013 | SUSPICIOUS                 | unknown@vpn-gateway (203.0.113.91) | login_failure via password — unknown username [Part of 3x repeated login_failure burst within 2m]
+2026-10-19T09:16:19Z | AUTH-0014 | SUSPICIOUS                 | unknown@vpn-gateway (203.0.113.91) | login_failure via password — unknown username [Part of 3x repeated login_failure burst within 2m]
+2026-10-19T09:17:01Z | EDR-1003  | P2 (High) [Score 66.00]    | unknown@VPN-GW-01                | Repeated authentication failures (action=rate_limited, ticket=INC-503)
+2026-10-19T09:40:12Z | AUTH-0015 | LIKELY_BENIGN              | n.wilson@workstation-09 (198.51.100.29) | login_success via MFA — normal office login [Routine authenticated session]
+2026-10-19T10:03:41Z | AUTH-0016 | LIKELY_BENIGN              | m.patel@admin-console (198.51.100.22) | privilege_granted via MFA — approved change ticket CHG-1042 [Privilege grant reconciled with approved change ticket]
+2026-10-19T10:06:12Z | AUTH-0017 | HIGH_REVIEW                | m.patel@admin-console (198.51.100.22) | privilege_granted via MFA — no change ticket in event; investigate [Unreferenced privilege grant requiring change verification]
+2026-10-19T10:07:02Z | EDR-1004  | P1 (Critical) [Score 90.50] | m.patel@ADMIN-CONSOLE            | Privilege granted without change reference (action=logged, ticket=INC-504)
+2026-10-19T10:18:03Z | AUTH-0018 | LIKELY_BENIGN              | svc-sync@directory-01 (192.0.2.55) | login_success via service_token — expected sync job [Scheduled service-account login from documented fixture IP]
+2026-10-19T10:22:16Z | AUTH-0019 | LIKELY_BENIGN              | d.ross@workstation-22 (198.51.100.36) | login_failure via password — single typo [Single password typo followed by MFA success AUTH-0020 at 2026-10-19T11:51:08Z (full-dataset view)]
+2026-10-19T11:51:08Z | AUTH-0020 | LIKELY_BENIGN              | d.ross@workstation-22 (198.51.100.36) | login_success via MFA — normal login after typo [MFA login recovery 88m 52s after single typo AUTH-0019 [OUTSIDE OFFICIAL INCIDENT WINDOW 08:00:00Z-10:30:00Z]]
+========================================================================================ok
+test_08_correlation_time_window_and_directional_matching (test_alert_ranker.TestStarterPackRankingAndCorrelation.test_08_correlation_time_window_and_directional_matching)
+Verify directional correlation windows and diagnostic match/exclusion notes. ... ok
+test_09_correlation_avoids_matching_unrelated_host_or_user_events (test_alert_ranker.TestStarterPackRankingAndCorrelation.test_09_correlation_avoids_matching_unrelated_host_or_user_events)
+Verify events on a different host or for a different user do not falsely correlate. ... ok
+test_10_missing_or_invalid_timestamps_handled_safely_in_correlation_and_timeline (test_alert_ranker.TestStarterPackRankingAndCorrelation.test_10_missing_or_invalid_timestamps_handled_safely_in_correlation_and_timeline)
+Ensure invalid or empty timestamps do not crash correlation or timeline generation. ... ok
+test_11_soc_t04_mode_a_full_dataset_vs_mode_b_strict_incident_window (test_alert_ranker.TestStarterPackRankingAndCorrelation.test_11_soc_t04_mode_a_full_dataset_vs_mode_b_strict_incident_window)
+Verify Mode A includes AUTH-0020 with discrepancy note and Mode B excludes AUTH-0020 returning insufficient_evidence. ... ok
+test_12_strict_vs_full_timeline_separation_and_classification (test_alert_ranker.TestStarterPackRankingAndCorrelation.test_12_strict_vs_full_timeline_separation_and_classification)
+Verify strict incident timeline excludes AUTH-0020 (23 events) while full timeline includes all 24 events. ... ok
+test_13_recommendations_and_heuristic_cmdb_assumptions_documented (test_alert_ranker.TestStarterPackRankingAndCorrelation.test_13_recommendations_and_heuristic_cmdb_assumptions_documented)
+Verify recommendations and assumptions clarify heuristic confidence and CMDB asset criticality. ... ok
+test_14_reusable_pattern_evaluation_independent_of_case_id_labels (test_alert_ranker.TestStarterPackRankingAndCorrelation.test_14_reusable_pattern_evaluation_independent_of_case_id_labels)
+Verify evaluate_soc_test_cases works with custom case_id values. ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.026s
+
+OK
+
